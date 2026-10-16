@@ -1,0 +1,10 @@
+Configuracion,Columnas,R2,desv,MAE_log,seg,Ganancia R2
+1. Seleccion de referencia,37,0.45,0.0185,4.1797,8.1263,0.0
+2. Estructura y tipologia,34,0.1614,0.0126,6.0093,7.6073,-0.2886
+3. + Ubicacion,39,0.2093,0.013,5.7486,7.8069,0.0479
+4. + Reglas de reserva,42,0.3356,0.0159,4.8799,8.1826,0.1262
+5. + Anfitrion,47,0.4503,0.024,4.2069,8.2863,0.1147
+6. + Conteo de comodidades,48,0.4644,0.0247,4.0999,8.2794,0.0141
+7. + Comodidades una por una,149,0.4743,0.0221,4.0471,9.4072,0.0099
+8. + Presentacion del anuncio,156,0.4751,0.0195,4.0464,10.1511,0.0008
+9. + Texto (TF-IDF + SVD),171,0.4693,0.0199,4.0896,24.0103,-0.0058
