@@ -1,0 +1,32 @@
+,Tema,Variable,Origen,Relacion teorica con el ingreso anual,Signo esperado,Quien la controla
+0,Estructura,accommodates,original,"Capacidad maxima de huespedes. Acota el tamano del grupo que puede reservar y, con el, la tarifa que el alojamiento puede sostener.",+,Decision
+1,Estructura,bedrooms,original,Numero de habitaciones. Separa el apartamento familiar del estudio y determina cuantos grupos independientes caben.,+,Dotacion
+2,Estructura,beds,original,"Numero de camas. A igual numero de habitaciones, mide si el espacio se densifico con camas adicionales.",+,Dotacion
+3,Estructura,n_banos,creada de bathrooms_text,"Numero de banos extraido del texto, con medio bano valorado en 0,5. La dotacion sanitaria limita el numero de huespedes simultaneos que el espacio atiende sin conflicto.",+,Dotacion
+4,Estructura,bano_compartido,creada de bathrooms_text,Marca de bano compartido. Compartir bano elimina la privacidad y traslada el alojamiento al segmento de habitacion economica.,-,Dotacion
+5,Estructura,huesp_x_habitacion,creada,"Huespedes por habitacion. Mide hacinamiento: a igual capacidad, un valor alto indica cuartos compartidos y tarifa por huesped mas baja.",-,Dotacion
+6,Estructura,camas_x_habitacion,creada,Camas por habitacion. Distingue la habitacion doble del dormitorio colectivo.,-,Dotacion
+7,Estructura,banos_x_huesped,creada,Banos por huesped. Dotacion sanitaria relativa al tamano del grupo.,+,Dotacion
+8,Equipamiento,n_amenities,creada de amenities,Longitud de la lista de comodidades. Resume la inversion del anfitrion en dotacion y funciona como senal visible de calidad en el buscador.,+,Decision
+9,Equipamiento,am_* (dummies),creadas de amenities,"Una columna por comodidad frecuente. Cada comodidad cambia el costo del anfitrion y la disposicion a pagar del huesped, y el conteo no las distingue: cafetera y escritorio senalan estancia de trabajo, el acceso autonomo reduce la friccion operativa y habilita mas rotacion, el ascensor condiciona el acceso en edificios altos.",+,Decision
+10,Ubicacion,latitude,original,Latitud. Bogota presenta un gradiente de renta y de oferta hotelera en direccion sur-norte que ninguna otra columna recoge con esa resolucion.,+,Dotacion
+11,Ubicacion,longitude,original,"Longitud. Separa el eje oriental, contra los cerros, del occidente de la ciudad.",+,Dotacion
+12,Ubicacion,dist_zona_t,creada,Distancia en kilometros al nucleo de ocio y negocios de la Zona T y el Parque de la 93. La demanda de estancia corta se concentra alli y decae con la distancia.,-,Dotacion
+13,Ubicacion,dist_aeropuerto,creada,Distancia al aeropuerto El Dorado. Determina el atractivo para estancias de una noche ligadas a conexiones aereas.,-,Dotacion
+14,Ubicacion,dist_centro_hist,creada,Distancia al centro historico. Captura una demanda turistica distinta de la de negocios.,-,Dotacion
+15,Ubicacion,neighbourhood_cleansed,original,"Localidad, en 20 categorias. Recoge seguridad percibida, comercio y densidad de oferta, que las distancias no representan.",mixto,Dotacion
+16,Reglas de reserva,log_min_noches,creada de minimum_nights,"Logaritmo de la estancia minima. Selecciona el segmento de demanda: un minimo de una noche compite con la hoteleria, y uno de varias semanas compite con el arriendo.",-,Decision
+17,Reglas de reserva,estadia_min_larga,creada de minimum_nights,"Marca de estancia minima de 28 noches o mas, que es el umbral comercial del arriendo mensual. Ese modelo de negocio cobra tarifa con descuento y recibe menos comentarios, de modo que reduce tanto el ingreso estimado como la ocupacion medida.",-,Decision
+18,Reglas de reserva,log_max_noches,creada de maximum_nights,Logaritmo de la estancia maxima. Un tope bajo restringe la estancia larga.,mixto,Decision
+19,Anfitrion,antiguedad_host,creada de hosts_time_as_host_years/months,"Anos operando como anfitrion. La experiencia mejora la gestion de tarifa y calendario, mientras que el inventario mas antiguo tiende a estar menos renovado; la relacion no es monotona y por eso la correlacion lineal no la detecta.",mixto,Desempeno
+20,Anfitrion,log_anuncios_host,creada de host_listings_count,Logaritmo del numero de anuncios del anfitrion. Separa al arrendador ocasional del operador con cartera.,+,Decision
+21,Anfitrion,anuncios_completos,original (calculated_host_listings_count_entire_homes),"Numero de alojamientos completos del mismo anfitrion. Identifica al operador profesional, que fija tarifas con herramientas de precio dinamico y mantiene el calendario abierto todo el ano.",+,Decision
+22,Anfitrion,es_superhost,creada de host_is_superhost,"Distintivo que exige calificacion alta, respuesta rapida y pocas cancelaciones. Actua como senal de calidad verificada y mejora la posicion en el buscador, de modo que su efecto se concentra en la ocupacion mas que en la tarifa.",+,Desempeno
+23,Anfitrion,tiene_licencia,creada de license,"Registro nacional de turismo declarado. La formalidad permite facturar, atender demanda corporativa y operar sin riesgo de retiro del anuncio.",+,Decision
+24,Presentacion,largo_nombre,creada de name,Numero de caracteres del titulo. Mide el esfuerzo del anfitrion en la ficha publica.,+,Decision
+25,Presentacion,largo_descripcion,creada de description,"Numero de caracteres de la descripcion, sin etiquetas HTML. Una descripcion extensa acompana a la gestion profesional del anuncio.",+,Decision
+26,Presentacion,t_* (palabras del titulo),creadas de name,"Marcas de lujo, vista, nuevo, moderno y centro en el titulo. Anuncian atributos que ninguna columna estructurada registra.",+,Decision
+27,Estructura,metros_cuadrados,creada de description,"Superficie declarada por el anfitrion en la descripcion, recuperada del texto. El area determina cuantos huespedes caben con holgura y es el atributo con que se tasa un inmueble en cualquier otro mercado; la fuente no la publica como columna.",+,Dotacion
+28,Estructura,declara_area,creada de description,"Marca de que el anfitrion declara la superficie. Separa al anuncio redactado con detalle del anuncio minimo, y evita que el relleno del area se confunda con un area pequena.",+,Decision
+29,Tipologia,room_type,original,"Alojamiento entero, habitacion privada, habitacion compartida o habitacion de hotel. Define el producto que se vende y es la particion mas gruesa del mercado.",mixto,Decision
+30,Tipologia,property_type,original,"Tipo de inmueble en 65 categorias, agrupadas por debajo del 1 por ciento. Distingue loft, apartamento, casa y habitacion de hotel dentro de un mismo room_type.",mixto,Dotacion

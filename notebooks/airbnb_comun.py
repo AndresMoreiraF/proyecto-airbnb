@@ -135,15 +135,66 @@ def a_numero(serie):
     return serie.str.replace("[$,]", "", regex=True).astype(float)   # elimina $ y , con una sola expresion regular
 
 
+def _campo_cotizacion(texto, campo):
+    """Extrae un campo del objeto JSON con que la fuente guarda la cotizacion de la tarifa."""
+    try:                                               # intenta interpretar el texto como JSON
+        return json.loads(texto)["quote"].get(campo)   # devuelve el campo pedido del objeto quote
+    except (TypeError, ValueError, KeyError):          # si el texto falta o no tiene esa estructura
+        return None                                    # devuelve vacio
+
+
 def cargar_listings():
-    """Carga la tabla de alojamientos y agrega el precio por noche como numero."""
+    """Carga la tabla de alojamientos, convierte la tarifa y abre la cotizacion que la produjo.
+
+    La fuente no publica una tarifa de catalogo: publica el resultado de una consulta de
+    disponibilidad, con su fecha, su duracion y su regimen de precio. Esas condiciones
+    determinan que significa la cifra y se extraen aqui, junto a la tarifa.
+    """
     tabla = pd.read_csv(                               # lee el archivo comprimido
         DATOS / "listings.csv.gz",                     # ruta del archivo
         dtype={"price": str},                          # fuerza price a texto, porque viene como "$274,830.78"
         low_memory=False,                              # lee el archivo completo para no inferir mal los tipos
     )
-    tabla["precio_noche"] = a_numero(tabla["price"])   # precio por noche en pesos, como numero
+    tabla["precio_noche"] = a_numero(tabla["price"])   # tarifa por noche en pesos, como numero
+
+    crudo = tabla["price_quote_raw"]                                           # texto JSON de la cotizacion
+    tabla["es_mensual"] = crudo.apply(                                          # regimen de precio de la cotizacion
+        lambda t: bool(_campo_cotizacion(t, "is_monthly_priced"))).astype(bool)   # True si la tarifa viene prorrateada de un mes
+    tabla["descuento_cotizacion"] = pd.to_numeric(                              # descuento ya aplicado a la tarifa
+        crudo.apply(lambda t: _campo_cotizacion(t, "discount_amount")), errors="coerce").fillna(0)
+    entrada = pd.to_datetime(                                                   # fecha de entrada que devolvio la consulta
+        crudo.apply(lambda t: _campo_cotizacion(t, "requested_checkin_date")), errors="coerce")
+    salida = pd.to_datetime(                                                    # fecha de salida que devolvio la consulta
+        crudo.apply(lambda t: _campo_cotizacion(t, "requested_checkout_date")), errors="coerce")
+    tabla["noches_cotizadas"] = (salida - entrada).dt.days                      # duracion de la estancia cotizada
+    # La consulta pidio la primera fecha con disponibilidad, de modo que la distancia hasta esa
+    # fecha mide cuanto tiempo lleva bloqueado el calendario. Queda para el diagnostico y fuera
+    # de cualquier modelo de ingreso, donde seria una medida del resultado.
+    tabla["mes_cotizacion"] = entrada.dt.to_period("M").astype(str)             # mes de la fecha cotizada
+    tabla["dias_hasta_cotizacion"] = (entrada - entrada.min()).dt.days          # dias desde la primera fecha disponible del archivo
     return tabla                                       # devuelve la tabla lista
+
+
+def preparar_poblacion(tabla, corte=None):
+    """Agrega las variables que definen la poblacion de analisis y el objetivo por exposicion.
+
+    La exposicion es el numero de dias que el anuncio llevaba publicado dentro de la ventana de
+    365 dias con que la fuente calcula el ingreso. Solo es observable para los anuncios que
+    recibieron al menos un comentario, porque el archivo no trae la fecha de publicacion.
+    """
+    t = tabla.copy()                                                            # trabaja sobre una copia
+    if corte is None:                                                           # si no se indico la fecha de corte
+        corte = pd.Timestamp("2026-09-15")                                      # el dia anterior al inicio del calendario
+    primera = pd.to_datetime(t["first_review"], errors="coerce")                # fecha del primer comentario
+    ultima = pd.to_datetime(t["last_review"], errors="coerce")                  # fecha del ultimo comentario
+    t["dias_expuesto"] = (corte - primera).dt.days.clip(lower=1, upper=365)     # dias dentro de la ventana, con tope de un ano
+    t["exposicion_completa"] = t["dias_expuesto"] >= 365                        # True si estuvo publicado toda la ventana
+    t["exposicion_observable"] = primera.notna()                                # True si hay con que medir la exposicion
+    t["actividad_detectada"] = (ultima > corte - pd.Timedelta(days=365)).fillna(False)   # True si hubo comentario en la ventana
+    t["ingreso_anual"] = t["estimated_revenue_l365d"]                           # ingreso bruto estimado de la ventana
+    t["ingreso_por_dia"] = t["ingreso_anual"] / t["dias_expuesto"]              # ingreso por dia de exposicion
+    t["noches_ocupadas"] = t["estimated_occupancy_l365d"].astype(float)         # noches ocupadas estimadas
+    return t                                                                    # devuelve la tabla preparada
 
 
 def ocupacion_calendario(fecha_corte=None):
@@ -192,8 +243,10 @@ FUGAS_RENTABILIDAD = {
     "price_quote_total_price": "cotizacion que reproduce el precio publicado",
     "price_quote_price_per_night": "coincide con el precio publicado en la practica totalidad de los casos",
     "price_quote_raw": "respuesta cruda de la cotizacion, contiene el precio",
-    "price_quote_checkin_date": "fecha de la cotizacion del precio",
-    "price_quote_checkout_date": "fecha de la cotizacion del precio",
+    "price_quote_checkin_date": "la consulta pidio la primera fecha con disponibilidad, de modo "
+                                "que la fecha cotizada mide cuanto lleva bloqueado el calendario",
+    "price_quote_checkout_date": "cierra la estancia cotizada, que la regla de estancia minima "
+                                 "del propio anuncio determina",
     "estimated_occupancy_l365d": "es el segundo factor del ingreso anual",
     "estimated_revenue_l365d": "es el objetivo",
     "availability_30": "disponibilidad observada, resultado de la operacion del alojamiento",
@@ -345,10 +398,13 @@ VARIABLES = [
     ("Presentacion", "t_* (palabras del titulo)", "creadas de name",
      "Marcas de lujo, vista, nuevo, moderno y centro en el titulo. Anuncian atributos que "
      "ninguna columna estructurada registra.", "+"),
-    ("Presentacion", "texto (TF-IDF + SVD)", "creada de name y description",
-     "Representacion numerica del titulo y la descripcion, reducida a 15 componentes. Recupera "
-     "atributos descritos en prosa, como la vista, el estrato del edificio o la cercania a un "
-     "hito, que no existen como columna.", "mixto"),
+    ("Estructura", "metros_cuadrados", "creada de description",
+     "Superficie declarada por el anfitrion en la descripcion, recuperada del texto. El area "
+     "determina cuantos huespedes caben con holgura y es el atributo con que se tasa un "
+     "inmueble en cualquier otro mercado; la fuente no la publica como columna.", "+"),
+    ("Estructura", "declara_area", "creada de description",
+     "Marca de que el anfitrion declara la superficie. Separa al anuncio redactado con detalle "
+     "del anuncio minimo, y evita que el relleno del area se confunda con un area pequena.", "+"),
 
     # --- Tipologia --------------------------------------------------------------------
     ("Tipologia", "room_type", "original",
@@ -360,11 +416,33 @@ VARIABLES = [
 ]
 
 
+# Quien controla cada variable. La pregunta la hace un propietario que todavia no publico, de
+# modo que la clasificacion decide que entra en su modelo: la dotacion que ya posee y las
+# decisiones a las que puede comprometerse, pero no el desempeno que aun no tiene.
+CONTROL = {
+    "metros_cuadrados": "Dotacion", "declara_area": "Decision",
+    "tiene_licencia": "Decision", "log_anuncios_host": "Decision",
+    "anuncios_completos": "Decision", "antiguedad_host": "Desempeno",
+    "es_superhost": "Desempeno", "room_type": "Decision", "property_type": "Dotacion",
+    "accommodates": "Decision",
+}
+CONTROL_POR_TEMA = {                                   # para las variables que no estan en el diccionario
+    "Estructura": "Dotacion", "Ubicacion": "Dotacion", "Tipologia": "Dotacion",
+    "Equipamiento": "Decision", "Reglas de reserva": "Decision", "Presentacion": "Decision",
+    "Anfitrion": "Decision",
+}
+
+
 def tabla_variables():
-    """Devuelve la tabla de variables seleccionadas, agrupada por tematica."""
-    return pd.DataFrame(VARIABLES, columns=["Tema", "Variable", "Origen",
-                                            "Relacion teorica con el ingreso anual",
-                                            "Signo esperado"])
+    """Devuelve la tabla de variables seleccionadas, con su tematica y quien las controla."""
+    tabla = pd.DataFrame(VARIABLES, columns=["Tema", "Variable", "Origen",
+                                             "Relacion teorica con el ingreso anual",
+                                             "Signo esperado"])
+    tabla["Quien la controla"] = [                     # dotacion, decision o desempeno
+        CONTROL.get(v, CONTROL_POR_TEMA.get(t, "Dotacion"))
+        for v, t in zip(tabla["Variable"], tabla["Tema"])
+    ]
+    return tabla
 
 
 def tabla_descartes():
@@ -457,21 +535,22 @@ class CrearColumnas(BaseEstimator, TransformerMixin):
         X["dist_aeropuerto"] = distancia_km(X["latitude"], X["longitude"], *AEROPUERTO)      # km al aeropuerto
         X["dist_centro_hist"] = distancia_km(X["latitude"], X["longitude"], *CENTRO_HISTORICO)   # km al centro historico
 
-        # Caracteristicas de la cotizacion. No describen la vivienda: describen la consulta con
-        # que la fuente obtuvo la tarifa, y entran como controles de la medicion del objetivo.
-        entrada = pd.to_datetime(X["price_quote_checkin_date"], errors="coerce")      # fecha de entrada de la cotizacion
-        salida = pd.to_datetime(X["price_quote_checkout_date"], errors="coerce")      # fecha de salida de la cotizacion
-        X["noches_cotizadas"] = (salida - entrada).dt.days                            # duracion de la estancia cotizada
-        X["mes_checkin"] = entrada.dt.month                                           # mes de entrada, que recoge la temporada
-        X["dia_semana_checkin"] = entrada.dt.dayofweek                                # dia de la semana de entrada
-        X["cotizacion_mensual"] = (X["noches_cotizadas"] >= 28).astype(int)           # 1 si la tarifa cotizada es mensual
-
         # Texto del anuncio.
         titulo = X["name"].fillna("")                                    # titulo, con los vacios como cadena vacia
         descripcion = (X["description"].fillna("")                       # descripcion, con los vacios como cadena vacia
                        .str.replace(r"<[^>]+>", " ", regex=True))        # quita las etiquetas HTML que trae el 43,8 % de los casos
         X["largo_nombre"] = titulo.str.len()                             # caracteres del titulo
         X["largo_descripcion"] = descripcion.str.len()                   # caracteres de la descripcion
+
+        # Superficie declarada en la descripcion. La fuente no trae una columna de area, y una
+        # parte de los anfitriones la menciona en prosa. El area determina la capacidad y la
+        # tarifa que el inmueble sostiene, de modo que recuperarla del texto anade una variable
+        # estructural que no existe en ninguna columna.
+        area = descripcion.str.extract(                                  # busca un numero seguido de la palabra metros
+            r"(\d{1,4})\s*(?:m2|m²|mts|metros\s+cuadrados|metros)", flags=re.IGNORECASE)[0]
+        area = pd.to_numeric(area, errors="coerce")                      # lo convierte a numero
+        X["metros_cuadrados"] = area.where((area >= 10) & (area <= 600))  # descarta cifras imposibles para una vivienda
+        X["declara_area"] = X["metros_cuadrados"].notna().astype(int)     # 1 si el anfitrion declara el area
         titulo_min = titulo.str.lower()                                  # titulo en minusculas para buscar palabras
         for columna, patron in PALABRAS_TITULO.items():                  # recorre las palabras buscadas
             X[columna] = titulo_min.str.contains(patron, regex=True).astype(int)   # 1 si el titulo la menciona
@@ -492,12 +571,13 @@ class CrearColumnas(BaseEstimator, TransformerMixin):
 class DummiesAmenities(BaseEstimator, TransformerMixin):
     """Crea una columna por comodidad frecuente.
 
-    La lista de comodidades se aprende en `fit` con la particion de entrenamiento, de modo que
-    la de prueba no influye en que columnas existen. Se descartan las comodidades demasiado
-    raras, que permitirian memorizar pocas filas, y las casi universales, que no discriminan.
+    Entran las comodidades presentes en al menos uno de cada diez anuncios. Las muy raras no
+    cambian el error y ensanchan la matriz, y las casi universales no distinguen a un
+    alojamiento de otro. La lista se aprende en `fit` con la particion de entrenamiento, de
+    modo que la de prueba no influye en que columnas existen.
     """
 
-    def __init__(self, frec_min=0.03, frec_max=0.97):  # al crearla se fijan los dos umbrales
+    def __init__(self, frec_min=0.10, frec_max=0.97):  # al crearla se fijan los dos umbrales
         self.frec_min = frec_min                       # frecuencia minima para que la comodidad entre
         self.frec_max = frec_max                       # frecuencia maxima para que la comodidad entre
 
@@ -565,13 +645,19 @@ BLOQUES = {
     "equipamiento": ["n_amenities"],                   # el conteo de comodidades, sin abrirlas una por una
     "ubicacion": ["latitude", "longitude", "dist_zona_t", "dist_aeropuerto", "dist_centro_hist"],
     "reglas": ["log_min_noches", "log_max_noches", "estadia_min_larga"],
-    "anfitrion": ["antiguedad_host", "log_anuncios_host", "anuncios_completos",
-                  "es_superhost", "tiene_licencia"],
+    # Decisiones de operacion. El propietario las elige antes de publicar y puede comprometerse
+    # a ellas, de modo que son las palancas sobre las que el modelo informa una decision.
+    "decision_anfitrion": ["tiene_licencia", "log_anuncios_host", "anuncios_completos"],
+    # Consecuencias de haber operado. No existen para quien todavia no publico, y el distintivo
+    # de superanfitrion exige diez estancias completadas en la misma ventana que mide el
+    # objetivo, de modo que para la etapa de actividad la variable implica la etiqueta.
+    "desempeno_pasado": ["es_superhost", "antiguedad_host"],
     "presentacion": ["largo_nombre", "largo_descripcion"] + list(PALABRAS_TITULO),
-    # Controles de la medicion de la tarifa. La fuente publica una cotizacion por anuncio, con
-    # fecha de entrada y duracion propias, de modo que la tarifa por noche de dos anuncios no
-    # siempre corresponde al mismo producto. Estas columnas separan ese efecto del inmueble.
-    "cotizacion": ["noches_cotizadas", "mes_checkin", "dia_semana_checkin", "cotizacion_mensual"],
+    "area": ["metros_cuadrados", "declara_area"],      # superficie recuperada de la descripcion
+    # Reglas que el anfitrion fija dia a dia en el calendario. Son decisiones suyas, de modo
+    # que entran sin fuga, a diferencia de la disponibilidad, que registra el resultado.
+    "reglas_calendario": ["valores_estancia_minima", "rango_estancia_minima",
+                          "varia_estancia_minima", "estancia_maxima_mediana"],
     # Conjunto de referencia: la seleccion mas estrecha, con las variables que una revision por
     # correlacion lineal con el precio deja en pie. Sirve de punto de comparacion de la ablacion.
     "referencia": ["latitude", "longitude", "accommodates", "bedrooms", "beds", "n_banos",
@@ -585,8 +671,28 @@ BLOQUES_ESPECIALES = ["comodidades", "tipologia", "texto"]
 TODOS_LOS_BLOQUES = [b for b in BLOQUES if b != "referencia"] + BLOQUES_ESPECIALES
 # Conjunto que la ablacion deja en pie. El bloque de texto queda fuera porque aumenta el error
 # en los tres objetivos, y el conjunto se fija aqui para que los dos enfoques usen el mismo.
-BLOQUES_ELEGIDOS = ["estructura", "equipamiento", "ubicacion", "reglas", "anfitrion",
-                    "presentacion", "cotizacion", "comodidades", "tipologia"]
+# Las variables se clasifican por quien las controla, porque la pregunta la hace un
+# propietario que todavia no publico y necesita saber a que puede comprometerse.
+DOTACION = ["estructura", "ubicacion", "area", "tipologia"]            # lo que ya posee y no elige
+DECISION = ["reglas", "reglas_calendario", "equipamiento", "comodidades",   # a lo que se compromete
+            "presentacion", "decision_anfitrion"]
+DESEMPENO = ["desempeno_pasado"]                                       # resultado de haber operado
+
+# Escenario de un propietario nuevo: dotacion y decisiones, sin desempeno pasado, que para el
+# vale siempre lo mismo y no informa ninguna de las predicciones que va a pedir.
+BLOQUES_ELEGIDOS = DOTACION + DECISION
+# Escenario de un operador que amplia cartera: conoce su propio historial y puede usarlo.
+BLOQUES_OPERADOR = DOTACION + DECISION + DESEMPENO
+# Bloques propuestos y descartados por la medicion, con el motivo. La ablacion los evalua y la
+# tabla deja constancia de que la decision tiene respaldo y no es una omision.
+DESCARTES_EMPIRICOS = {
+    "texto": "la representacion del titulo y la descripcion por TF-IDF y descomposicion en "
+             "valores singulares aumenta el error en los tres objetivos",
+    "precio_vecinos": "la mediana de la tarifa de los 25 anuncios mas cercanos no mejora el "
+                      "error, porque las coordenadas y las distancias ya la contienen",
+    "fecha_de_cotizacion": "el mes de la fecha cotizada mide cuanto lleva bloqueado el "
+                           "calendario, de modo que describe el resultado y no el inmueble",
+}
 
 
 def armar_preprocesador(bloques=None, componentes_texto=15, codificacion="onehot"):
@@ -651,10 +757,32 @@ def metricas(y_real, y_pred):
     real = np.asarray(y_real, dtype=float)                     # valores reales como arreglo
     return pd.Series({
         "MAE": mean_absolute_error(real, pred),                                        # error absoluto medio
+        "MedAE": float(np.median(np.abs(real - pred))),                                # mediana del error absoluto, que la cola no arrastra
         "RMSE": float(np.sqrt(mean_squared_error(real, pred))),                        # raiz del error cuadratico medio
         "R2": r2_score(real, pred),                                                    # proporcion de varianza explicada
-        "RMSLE": float(np.sqrt(np.mean((np.log1p(pred) - np.log1p(real)) ** 2))),       # error cuadratico en escala logaritmica
     })
+
+
+def reglas_calendario():
+    """Resume por alojamiento las reglas de reserva que el anfitrion fija dia a dia.
+
+    El calendario trae la estancia minima y maxima de cada dia, de modo que registra si el
+    anfitrion endurece o relaja la regla a lo largo del ano. Esas son decisiones suyas, no
+    resultados de la operacion, y por eso pueden entrar como variables explicativas.
+    """
+    calendario = pd.read_csv(                          # carga solo las columnas de reglas
+        DATOS / "calendar.csv.gz",
+        usecols=["listing_id", "minimum_nights", "maximum_nights"],
+    )
+    por_anuncio = calendario.groupby("listing_id")     # agrupa por alojamiento
+    reglas = pd.DataFrame({
+        "valores_estancia_minima": por_anuncio["minimum_nights"].nunique(),   # cuantas reglas distintas usa en el ano
+        "rango_estancia_minima": (por_anuncio["minimum_nights"].max()         # diferencia entre la regla mas dura y la mas blanda
+                                  - por_anuncio["minimum_nights"].min()),
+        "estancia_maxima_mediana": por_anuncio["maximum_nights"].median(),     # tope de estancia habitual
+    })
+    reglas["varia_estancia_minima"] = (reglas["valores_estancia_minima"] > 1).astype(int)   # 1 si la cambia alguna vez
+    return reglas                                      # devuelve una fila por alojamiento
 
 
 class ReglaPorGrupo(BaseEstimator, RegressorMixin):

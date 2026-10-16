@@ -1,0 +1,72 @@
+,Columna,Grupo,Motivo
+0,price,Fuga,"es el precio por noche, uno de los dos factores del ingreso anual"
+1,precio_noche,Fuga,version numerica del precio por noche
+2,price_quote_total_price,Fuga,cotizacion que reproduce el precio publicado
+3,price_quote_price_per_night,Fuga,coincide con el precio publicado en la practica totalidad de los casos
+4,price_quote_raw,Fuga,"respuesta cruda de la cotizacion, contiene el precio"
+5,price_quote_checkin_date,Fuga,"la consulta pidio la primera fecha con disponibilidad, de modo que la fecha cotizada mide cuanto lleva bloqueado el calendario"
+6,price_quote_checkout_date,Fuga,"cierra la estancia cotizada, que la regla de estancia minima del propio anuncio determina"
+7,estimated_occupancy_l365d,Fuga,es el segundo factor del ingreso anual
+8,estimated_revenue_l365d,Fuga,es el objetivo
+9,availability_30,Fuga,"disponibilidad observada, resultado de la operacion del alojamiento"
+10,availability_60,Fuga,disponibilidad observada
+11,availability_90,Fuga,disponibilidad observada
+12,availability_365,Fuga,disponibilidad observada
+13,availability_eoy,Fuga,disponibilidad observada hasta fin de ano
+14,has_availability,Fuga,disponibilidad observada
+15,number_of_reviews,Fuga,los comentarios son el insumo con que se estima la ocupacion
+16,number_of_reviews_ltm,Fuga,"comentarios del ultimo ano, insumo de la ocupacion estimada"
+17,number_of_reviews_l30d,Fuga,"comentarios del ultimo mes, insumo de la ocupacion estimada"
+18,number_of_reviews_ly,Fuga,"comentarios del ano anterior, insumo de la ocupacion estimada"
+19,reviews_per_month,Fuga,"comentarios por mes, insumo de la ocupacion estimada"
+20,first_review,Fuga,"fecha del primer comentario, solo existe si el alojamiento ya opero"
+21,last_review,Fuga,"fecha del ultimo comentario, solo existe si el alojamiento ya opero"
+22,review_scores_rating,Fuga,"calificacion, solo existe si el alojamiento ya recibio huespedes"
+23,review_scores_accuracy,Fuga,calificacion por dimension
+24,review_scores_cleanliness,Fuga,calificacion por dimension
+25,review_scores_checkin,Fuga,calificacion por dimension
+26,review_scores_communication,Fuga,calificacion por dimension
+27,review_scores_location,Fuga,calificacion por dimension
+28,review_scores_value,Fuga,calificacion por dimension
+29,neighborhood_overview,Vacias,sin un solo dato en la tabla
+30,host_since,Vacias,sin un solo dato en la tabla
+31,host_response_time,Vacias,sin un solo dato en la tabla
+32,host_response_rate,Vacias,sin un solo dato en la tabla
+33,host_acceptance_rate,Vacias,sin un solo dato en la tabla
+34,host_thumbnail_url,Vacias,sin un solo dato en la tabla
+35,host_neighbourhood,Vacias,sin un solo dato en la tabla
+36,host_total_listings_count,Vacias,sin un solo dato en la tabla
+37,host_verifications,Vacias,sin un solo dato en la tabla
+38,neighbourhood,Vacias,sin un solo dato en la tabla
+39,neighbourhood_group_cleansed,Vacias,sin un solo dato en la tabla
+40,bathrooms,Vacias,sin un solo dato en la tabla
+41,calendar_updated,Vacias,sin un solo dato en la tabla
+42,instant_bookable,Vacias,sin un solo dato en la tabla
+43,scrape_id,Constantes,un solo valor distinto en toda la tabla
+44,last_scraped,Constantes,un solo valor distinto en toda la tabla
+45,source,Constantes,un solo valor distinto en toda la tabla
+46,calendar_last_scraped,Constantes,un solo valor distinto en toda la tabla
+47,id,Identificadores,"clave o enlace, sin contenido predictivo"
+48,listing_url,Identificadores,"clave o enlace, sin contenido predictivo"
+49,picture_url,Identificadores,"clave o enlace, sin contenido predictivo"
+50,host_id,Identificadores,"clave o enlace, sin contenido predictivo"
+51,host_url,Identificadores,"clave o enlace, sin contenido predictivo"
+52,host_profile_id,Identificadores,"clave o enlace, sin contenido predictivo"
+53,host_profile_url,Identificadores,"clave o enlace, sin contenido predictivo"
+54,host_name,Identificadores,"clave o enlace, sin contenido predictivo"
+55,host_picture_url,Identificadores,"clave o enlace, sin contenido predictivo"
+56,minimum_minimum_nights,Redundantes,repite casi exactamente otra columna ya incluida
+57,maximum_minimum_nights,Redundantes,repite casi exactamente otra columna ya incluida
+58,minimum_maximum_nights,Redundantes,repite casi exactamente otra columna ya incluida
+59,maximum_maximum_nights,Redundantes,repite casi exactamente otra columna ya incluida
+60,minimum_nights_avg_ntm,Redundantes,repite casi exactamente otra columna ya incluida
+61,maximum_nights_avg_ntm,Redundantes,repite casi exactamente otra columna ya incluida
+62,host_listings_count,Redundantes,repite casi exactamente otra columna ya incluida
+63,calculated_host_listings_count,Redundantes,repite casi exactamente otra columna ya incluida
+64,calculated_host_listings_count_private_rooms,Redundantes,repite casi exactamente otra columna ya incluida
+65,calculated_host_listings_count_shared_rooms,Redundantes,repite casi exactamente otra columna ya incluida
+66,hosts_time_as_user_years,Redundantes,repite casi exactamente otra columna ya incluida
+67,hosts_time_as_user_months,Redundantes,repite casi exactamente otra columna ya incluida
+68,host_location,Sin_tratamiento,"texto libre de baja cobertura, sin tratamiento definido"
+69,host_about,Sin_tratamiento,"texto libre de baja cobertura, sin tratamiento definido"
+70,host_has_profile_pic,Sin_tratamiento,"texto libre de baja cobertura, sin tratamiento definido"
